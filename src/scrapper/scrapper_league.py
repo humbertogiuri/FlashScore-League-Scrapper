@@ -9,6 +9,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import argparse
 import datetime
 from time import sleep
+import pandas as pd
 
 def accept_cookies(driver):
     print('Handling with coockies...')
@@ -60,9 +61,25 @@ def get_match_stats(id_match):
     match_round_element = tournament_header.find_element(By.TAG_NAME, 'a')
     match_stats['Round'] = match_round_element.text.split('ROUND ')[-1]
     
+    match_stats['Date'] = driver.find_element(By.CLASS_NAME, 'duelParticipant__startTime')\
+                                    .find_element(By.TAG_NAME, 'div').text
+
+    teams_names = driver.find_elements(By.CLASS_NAME, 'participant__participantName.participant__overflow')
+    
+    match_stats['Home'] = teams_names[1].text
+    match_stats['Away'] = teams_names[-1].text
+    
+    score_text = driver.find_element(By.CLASS_NAME, 'detailScore__wrapper').text
+    score_text = score_text.replace('\n', ' ')
+    teams_gols = score_text.split(' - ')
+
+    match_stats['Score'] = score_text
+    match_stats['Home Gols'] = teams_gols[0]
+    match_stats['Away Gols'] = teams_gols[-1]
+
     #Getting All Stats
     all_stats = driver.find_elements(By.CLASS_NAME, 'stat__category')
-
+    
     #Get Values for each stat (home and away)
     for stat in all_stats:
         stat_name = stat.find_element(By.CLASS_NAME, 'stat__categoryName')
@@ -73,7 +90,7 @@ def get_match_stats(id_match):
         match_stats[f'Away {stat_name.text}'] = away_stat.text
     
     driver.quit()
-
+    
     return match_stats
 
 
@@ -96,15 +113,70 @@ if __name__ == '__main__':
     driver = webdriver.Chrome(service=service)
     driver.maximize_window()
     
+    columns = [
+        'Round',
+        'Date',
+        'Home',
+        'Away',
+        'Score',
+        'Home Gols',
+        'Away Gols',
+        'Home Ball Possession',
+        'Home Goal Attempts',
+        'Home Shots on Goal',
+        'Home Shots off Goal',
+        'Home Blocked Shots',
+        'Home Free Kicks',
+        'Home Corner Kicks',
+        'Home Offsides',
+        'Home Throw-in',
+        'Home Goalkeeper Saves',
+        'Home Fouls',
+        'Home Red Cards',
+        'Home Yellow Cards',
+        'Home Total Passes',
+        'Home Completed Passes',
+        'Home Tackles',
+        'Home Attacks',
+        'Home Dangerous Attacks',
+        'Away Ball Possession',
+        'Away Goal Attempts',
+        'Away Shots on Goal',
+        'Away Shots off Goal',
+        'Away Blocked Shots',
+        'Away Free Kicks',
+        'Away Corner Kicks',
+        'Away Offsides',
+        'Away Throw-in',
+        'Away Goalkeeper Saves',
+        'Away Fouls',
+        'Away Red Cards',
+        'Away Yellow Cards',
+        'Away Total Passes',
+        'Away Completed Passes',
+        'Away Tackles',
+        'Away Attacks',
+        'Away Dangerous Attacks'
+    ]
+
+    df_matchs = pd.DataFrame([], columns=columns)
+
     try:
-        driver.get(f"https://www.flashscore.com/football/{args.country}/{args.league}-{args.start_year}/results/")
+        driver.get(f"https://www.flashscore.com/football/{args.country}-{args.league}-{args.start_year}/results/")
         accept_cookies(driver)
         sleep(3)
         open_all_matchs(driver)
         matchs_elements = get_all_id_matchs(driver)
         matchs_ids = [x.get_attribute('id').split('_')[-1] for x in matchs_elements]
-        match_stats = get_match_stats(matchs_ids[0])
         
+        for match_id in matchs_ids:
+            match_stats = get_match_stats(matchs_ids[match_id])
+            df_match_stats = pd.DataFrame([match_stats], columns=columns)
+
+            df_matchs = pd.concat([df_matchs, df_match_stats], ignore_index=True)
+        
+
+        df_matchs.to_csv(f'/log/{args.country}-{args.league}-{args.start_year}.csv', index=False)
         driver.quit()
         
 
