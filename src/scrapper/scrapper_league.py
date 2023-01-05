@@ -6,10 +6,24 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import random
+import undetected_chromedriver as uc
 import argparse
 import datetime
 from time import sleep
 import pandas as pd
+
+def get_new_driver():
+    options = Options()
+    options.headless
+    options.add_argument('--disable-blink-features=AutomationControlled')
+
+    service = ChromeService(executable_path=ChromeDriverManager().install())
+
+    driver = uc.Chrome(service=service)
+    driver.maximize_window()
+
+    return driver
 
 def accept_cookies(driver):
     print('Handling with coockies...')
@@ -43,14 +57,7 @@ def get_match_stats(id_match):
 
     match_stats = dict()
 
-    options = Options()
-    options.headless
-    options.add_argument('--disable-blink-features=AutomationControlled')
-
-    service = ChromeService(executable_path=ChromeDriverManager().install())
-
-    driver = webdriver.Chrome(service=service)
-    driver.maximize_window()
+    driver = get_new_driver()
 
     driver.get(f'https://www.flashscore.com/match/{id_match}/#/match-summary/match-statistics/0')
     accept_cookies(driver)
@@ -103,15 +110,6 @@ if __name__ == '__main__':
     parser.add_argument('-lf', '--log_file', type=str, default='log.txt', help='File name from the log .txt')
 
     args = parser.parse_args()
-
-    options = Options()
-    options.headless
-    options.add_argument('--disable-blink-features=AutomationControlled')
-
-    service = ChromeService(executable_path=ChromeDriverManager().install())
-
-    driver = webdriver.Chrome(service=service)
-    driver.maximize_window()
     
     columns = [
         'Round',
@@ -162,7 +160,8 @@ if __name__ == '__main__':
     df_matchs = pd.DataFrame([], columns=columns)
 
     try:
-        driver.get(f"https://www.flashscore.com/football/{args.country}-{args.league}-{args.start_year}/results/")
+        driver = get_new_driver()
+        driver.get(f"https://www.flashscore.com/football/{args.country}/{args.league}-{args.start_year}/results/")
         accept_cookies(driver)
         sleep(3)
         open_all_matchs(driver)
@@ -170,11 +169,11 @@ if __name__ == '__main__':
         matchs_ids = [x.get_attribute('id').split('_')[-1] for x in matchs_elements]
         
         for match_id in matchs_ids:
-            match_stats = get_match_stats(matchs_ids[match_id])
+            match_stats = get_match_stats(match_id)
             df_match_stats = pd.DataFrame([match_stats], columns=columns)
 
             df_matchs = pd.concat([df_matchs, df_match_stats], ignore_index=True)
-        
+            sleep(random.randint(1, 4))
 
         df_matchs.to_csv(f'/log/{args.country}-{args.league}-{args.start_year}.csv', index=False)
         driver.quit()
