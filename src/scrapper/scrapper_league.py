@@ -15,13 +15,12 @@ import pandas as pd
 
 def get_new_driver():
     options = Options()
-    options.headless
     options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_argument("--headless")
 
     service = ChromeService(executable_path=ChromeDriverManager().install())
 
-    driver = uc.Chrome(service=service)
-    driver.maximize_window()
+    driver = uc.Chrome(service=service, options=options)
 
     return driver
 
@@ -112,6 +111,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     columns = [
+        'Season',
         'Round',
         'Date',
         'Home',
@@ -158,7 +158,7 @@ if __name__ == '__main__':
     ]
 
     df_matchs = pd.DataFrame([], columns=columns)
-
+    
     try:
         driver = get_new_driver()
         driver.get(f"https://www.flashscore.com/football/{args.country}/{args.league}-{args.start_year}/results/")
@@ -167,15 +167,18 @@ if __name__ == '__main__':
         open_all_matchs(driver)
         matchs_elements = get_all_id_matchs(driver)
         matchs_ids = [x.get_attribute('id').split('_')[-1] for x in matchs_elements]
+        print(matchs_ids)
         
         for match_id in matchs_ids:
             match_stats = get_match_stats(match_id)
+            match_stats['Season'] = args.start_year
             df_match_stats = pd.DataFrame([match_stats], columns=columns)
 
             df_matchs = pd.concat([df_matchs, df_match_stats], ignore_index=True)
             sleep(random.randint(1, 4))
-
-        df_matchs.to_csv(f'/log/{args.country}-{args.league}-{args.start_year}.csv', index=False)
+        
+        print('Saving Data...')
+        df_matchs.to_csv(f'.\src\scrapper\log\{args.country}-{args.league}-{args.start_year}.csv', index=False)
         driver.quit()
         
 
