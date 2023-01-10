@@ -9,8 +9,6 @@ from selenium.webdriver.support import expected_conditions as EC
 import random
 import undetected_chromedriver as uc
 import argparse
-import datetime
-from time import sleep
 import pandas as pd
 
 def get_new_driver():
@@ -26,7 +24,7 @@ def get_new_driver():
 
 def accept_cookies(driver):
     print('Handling with coockies...')
-    accept_button = WebDriverWait(driver, 4).until(
+    accept_button = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable((By.ID, 'onetrust-accept-btn-handler'))
             )
     accept_button.click()
@@ -39,7 +37,7 @@ def open_all_matchs(driver):
             WebDriverWait(driver, 2).until(
                 EC.element_to_be_clickable((By.CLASS_NAME, 'event__more.event__more--static'))
             ).click()
-            sleep(2)
+            driver.implicitly_wait(2)
     
     except TimeoutException:
         print('End of expand matchs...')
@@ -61,7 +59,7 @@ def get_match_stats(id_match):
     driver.get(f'https://www.flashscore.com/match/{id_match}/#/match-summary/match-statistics/0')
     accept_cookies(driver)
     
-    tournament_header = WebDriverWait(driver, 1).until(
+    tournament_header = WebDriverWait(driver, 5).until(
         EC.visibility_of_element_located((By.CLASS_NAME, 'tournamentHeader__country')))
     
     match_round_element = tournament_header.find_element(By.TAG_NAME, 'a')
@@ -99,13 +97,29 @@ def get_match_stats(id_match):
     
     return match_stats
 
+def get_all_season_matchs(ids, season):
+    df_matchs = pd.DataFrame([], columns=columns)
+    qtd_matchs = len(ids)
+
+    for i, match_id in enumerate(matchs_ids):
+        print(f'Match {i + 1}/{qtd_matchs}')
+
+        match_stats = get_match_stats(match_id)
+        df_match_stats = pd.DataFrame([match_stats], columns=columns)
+
+        df_matchs = pd.concat([df_matchs, df_match_stats], ignore_index=True)
+        driver.implicitly_wait(random.randint(1, 4))
+        
+    df_matchs['Season'] = season
+
+    return df_matchs
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Program for scrapper specific league')
     parser.add_argument('-c', '--country', type=str, required=True, help='League country. Remember to get the exact name on the flashscore url')
     parser.add_argument('-l', '--league', type=str, required=True, help='League name. Remember to get the exact name on the flashscore url')
-    parser.add_argument('-s', '--qtd_seasons', type=int, default=5, help='number of seasons that will be considered')
-    parser.add_argument('-y', '--start_year', type=int, default=int(datetime.date.today().year), help='year of the season that you wanna start the scrapper')
+    parser.add_argument('-s', '--seasons', nargs='*', type=str, required=True, help='list of seasons that will be scrapper')
     parser.add_argument('-lf', '--log_file', type=str, default='log.txt', help='File name from the log .txt')
 
     args = parser.parse_args()
@@ -157,33 +171,37 @@ if __name__ == '__main__':
         'Away Dangerous Attacks'
     ]
 
-    df_matchs = pd.DataFrame([], columns=columns)
+    df_all_seasons = pd.DataFrame([], columns=columns)
     
     try:
-        driver = get_new_driver()
-        driver.get(f"https://www.flashscore.com/football/{args.country}/{args.league}-{args.start_year}/results/")
-        accept_cookies(driver)
-        sleep(3)
-        open_all_matchs(driver)
-        matchs_elements = get_all_id_matchs(driver)
-        matchs_ids = [x.get_attribute('id').split('_')[-1] for x in matchs_elements]
-        print(matchs_ids)
-        
-        for match_id in matchs_ids:
-            match_stats = get_match_stats(match_id)
-            match_stats['Season'] = args.start_year
-            df_match_stats = pd.DataFrame([match_stats], columns=columns)
+        for season in args.seasons:
+            driver = get_new_driver()
 
-            df_matchs = pd.concat([df_matchs, df_match_stats], ignore_index=True)
-            sleep(random.randint(1, 4))
-        
+            print(f'{args.country} -> {args.league}-{season}')
+            driver.get(f"https://www.flashscore.com/football/{args.country}/{args.league}-{season}/results/")
+            
+            accept_cookies(driver)
+            
+            driver.implicitly_wait(3)
+
+            open_all_matchs(driver)
+            matchs_elements = get_all_id_matchs(driver)
+            matchs_ids = [x.get_attribute('id').split('_')[-1] for x in matchs_elements]
+            
+            df_season = get_all_season_matchs(ids=matchs_ids, season=season)
+            df_all_seasons = pd.concat([df_all_seasons, df_season], ignore_index=True)
+
+            driver.quit()
+
         print('Saving Data...')
-        df_matchs.to_csv(f'.\src\scrapper\log\{args.country}-{args.league}-{args.start_year}.csv', index=False)
-        driver.quit()
+        df_all_seasons.to_csv(f'.\src\scrapper\log\{args.country}-{args.league}.csv', index=False)
         
 
     except Exception as error:
         print(error)
         driver.quit()
+    
+    finally:
+        print('Scrapping End!')
 
     
