@@ -1,2 +1,4 @@
 futebol_stats
 *.csv
+data/
+*.parquet

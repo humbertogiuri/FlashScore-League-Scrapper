@@ -6,6 +6,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from time import sleep
 import random
 import undetected_chromedriver as uc
 import argparse
@@ -37,7 +38,7 @@ def open_all_matchs(driver):
             WebDriverWait(driver, 2).until(
                 EC.element_to_be_clickable((By.CLASS_NAME, 'event__more.event__more--static'))
             ).click()
-            driver.implicitly_wait(2)
+            sleep(2)
     
     except TimeoutException:
         print('End of expand matchs...')
@@ -50,6 +51,42 @@ def get_all_id_matchs(driver):
 
 
 def get_match_stats(id_match):
+    def get_odds():
+        print('Getting Odds Win or Lose...')
+        driver = get_new_driver()
+
+        driver.get(f'https://www.flashscore.com/match/{id_match}/#/odds-comparison/1x2-odds/full-time')
+        odds_win = WebDriverWait(driver, 5).until(
+                    EC.visibility_of_all_elements_located((By.CLASS_NAME, 'oddsCell__odd  '))
+                )
+        
+        home = odds_win[0].find_element(By.TAG_NAME, 'span').text
+        draw = odds_win[1].find_element(By.TAG_NAME, 'span').text
+        away = odds_win[2].find_element(By.TAG_NAME, 'span').text
+        
+        print('Getting Over/Under 2.5...')
+        driver.get(f'https://www.flashscore.com/match/{id_match}/#/odds-comparison/over-under/full-time')
+        
+        gols_ou = WebDriverWait(driver, 5).until(
+                    EC.visibility_of_all_elements_located((By.CLASS_NAME, 'ui-table__row'))
+                )
+
+        target_value = "2.5"
+        gols_2_5 = next((elem for elem in gols_ou if elem.find_element(By.CLASS_NAME, 'oddsCell__noOddsCell').text == target_value), None)
+        
+        gols_2_5_odds = [elem.text for elem in gols_2_5.find_elements(By.TAG_NAME, 'span')]     
+        
+        odds = {
+            'Home odd': home,
+            'Draw odd': draw,
+            'Away odd': away,
+            'Over 2.5': gols_2_5_odds[1],
+            'Under 2.5': gols_2_5_odds[2]
+        }
+
+        driver.quit()
+        return odds
+
     print(f'Scrapping Match -> {id_match}')
 
     match_stats = dict()
@@ -92,12 +129,14 @@ def get_match_stats(id_match):
 
         match_stats[f'Home {stat_name.text}'] = home_stat.text
         match_stats[f'Away {stat_name.text}'] = away_stat.text
+
+    match_stats.update(get_odds())
     
     driver.quit()
     
     return match_stats
 
-def get_all_season_matchs(ids, season):
+def get_all_season_matchs(ids, season, columns):
     df_matchs = pd.DataFrame([], columns=columns)
     qtd_matchs = len(ids)
 
@@ -108,7 +147,7 @@ def get_all_season_matchs(ids, season):
         df_match_stats = pd.DataFrame([match_stats], columns=columns)
 
         df_matchs = pd.concat([df_matchs, df_match_stats], ignore_index=True)
-        driver.implicitly_wait(random.randint(1, 4))
+        sleep(random.randint(1, 4))
         
     df_matchs['Season'] = season
 
@@ -119,8 +158,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Program for scrapper specific league')
     parser.add_argument('-c', '--country', type=str, required=True, help='League country. Remember to get the exact name on the flashscore url')
     parser.add_argument('-l', '--league', type=str, required=True, help='League name. Remember to get the exact name on the flashscore url')
-    parser.add_argument('-s', '--seasons', nargs='*', type=str, required=True, help='list of seasons that will be scrapper')
-    parser.add_argument('-lf', '--log_file', type=str, default='log.txt', help='File name from the log .txt')
+    parser.add_argument('-s', '--season', type=str, required=True, help='Season that will be scrapper')
+    parser.add_argument('-d', '--data_path', type=str, default='./data', help='Path to save the results')
 
     args = parser.parse_args()
     
@@ -134,70 +173,75 @@ if __name__ == '__main__':
         'Home Gols',
         'Away Gols',
         'Home Ball Possession',
-        'Home Goal Attempts',
-        'Home Shots on Goal',
-        'Home Shots off Goal',
-        'Home Blocked Shots',
-        'Home Free Kicks',
-        'Home Corner Kicks',
-        'Home Offsides',
-        'Home Throw-in',
-        'Home Goalkeeper Saves',
-        'Home Fouls',
-        'Home Red Cards',
-        'Home Yellow Cards',
-        'Home Total Passes',
-        'Home Completed Passes',
-        'Home Tackles',
-        'Home Attacks',
-        'Home Dangerous Attacks',
         'Away Ball Possession',
+        'Home Goal Attempts',
         'Away Goal Attempts',
+        'Home Shots on Goal',
         'Away Shots on Goal',
+        'Home Shots off Goal',
         'Away Shots off Goal',
+        'Home Blocked Shots',
         'Away Blocked Shots',
-        'Away Free Kicks',
-        'Away Corner Kicks',
-        'Away Offsides',
+        'Home Free Kicks',
+        'Away Free Kicks', 
+        'Home Corner Kicks',
+        'Away Corner Kicks', 
+        'Home Offsides',
+        'Away Offsides', 
+        'Home Throw-in',
         'Away Throw-in',
-        'Away Goalkeeper Saves',
-        'Away Fouls',
-        'Away Red Cards',
+        'Home Goalkeeper Saves',
+        'Away Goalkeeper Saves', 
+        'Home Fouls',
+        'Away Fouls', 
+        'Home Red Cards',
+        'Away Red Cards', 
+        'Home Yellow Cards',
         'Away Yellow Cards',
+        'Home Total Passes',
         'Away Total Passes',
+        'Home Completed Passes',
         'Away Completed Passes',
+        'Home Tackles',
         'Away Tackles',
+        'Home Attacks',
         'Away Attacks',
-        'Away Dangerous Attacks'
+        'Home Dangerous Attacks',
+        'Away Dangerous Attacks',
+        'Home odd',
+        'Draw odd',
+        'Away odd',
+        'Over 2.5',
+        'Under 2.5'
     ]
-
-    df_all_seasons = pd.DataFrame([], columns=columns)
     
     try:
-        for season in args.seasons:
-            driver = get_new_driver()
+        driver = get_new_driver()
 
-            print(f'{args.country} -> {args.league}-{season}')
-            driver.get(f"https://www.flashscore.com/football/{args.country}/{args.league}-{season}/results/")
-            
-            accept_cookies(driver)
-            
-            driver.implicitly_wait(3)
-
-            open_all_matchs(driver)
-            matchs_elements = get_all_id_matchs(driver)
-            matchs_ids = [x.get_attribute('id').split('_')[-1] for x in matchs_elements]
-            
-            df_season = get_all_season_matchs(ids=matchs_ids, season=season)
-            df_all_seasons = pd.concat([df_all_seasons, df_season], ignore_index=True)
-
-            driver.quit()
-
-        print('Saving Data...')
-        df_all_seasons.to_csv(f'.\src\scrapper\log\{args.country}-{args.league}.csv', index=False)
+        print(f'{args.country} -> {args.league}-{args.season}')
+        driver.get(f"https://www.flashscore.com/football/{args.country}/{args.league}-{args.season}/results/")
         
+        accept_cookies(driver)
+        
+        sleep(3)
+
+        open_all_matchs(driver)
+        matchs_elements = get_all_id_matchs(driver)
+        matchs_ids = [x.get_attribute('id').split('_')[-1] for x in matchs_elements]
+        
+        df_season = get_all_season_matchs(ids=matchs_ids, season=args.season, columns=columns)
+        driver.quit()
+
+        print('Saving Data (csv)...')
+        df_season.to_csv(f'{args.data_path}/{args.country}-{args.league}-{args.season}.csv', index=False)
+        print('Saving Data (parquet)...')
+        df_season.to_parquet(f'{args.data_path}/{args.country}-{args.league}-{args.season}.parquet', index=False)
+        
+    except OSError as error:
+        print('Inappropriate path file')
 
     except Exception as error:
+        print('Error while scrapping...')
         print(error)
         driver.quit()
     
