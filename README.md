@@ -67,7 +67,7 @@ The program accesses the page of the chosen competition on the website and searc
 pip install -r requirements.txt
 ```
 
-1. Run:
+4. Run:
 
 ```python
 python scrapper_league.py -c <country> -l <league> -s <season>
